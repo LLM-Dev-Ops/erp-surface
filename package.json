@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "start": "node dist/server.js",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,9 @@
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "claude-flow": "^2.7.47"
   },
