@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agentics.io/schemas/erp-surface/v1/request.schema.json",
+  "title": "ERP Surface Request",
+  "description": "Defines the valid structure for ERP surface API requests",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["getSurface", "simulate", "execute"],
+      "description": "The action to perform on the ERP surface"
+    },
+    "surfaceId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Unique identifier for the ERP surface"
+    },
+    "operationId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9_-]*$",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Optional operation identifier for tracking"
+    },
+    "input": {
+      "type": "object",
+      "description": "Input parameters for the action",
+      "additionalProperties": true
+    }
+  },
+  "required": ["action", "surfaceId", "input"],
+  "additionalProperties": false
+}

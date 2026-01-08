@@ -1,0 +1,44 @@
+{
+  "name": "@agentics/contracts",
+  "version": "1.0.0",
+  "description": "JSON Schema contracts and validators for ERP Surface API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src/schemas"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts"
+  },
+  "peerDependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "typescript": "^5.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./schemas/*": "./src/schemas/*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentics/erp-surface.git",
+    "directory": "packages/contracts"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

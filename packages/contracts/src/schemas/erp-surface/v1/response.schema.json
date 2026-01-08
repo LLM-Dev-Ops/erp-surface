@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agentics.io/schemas/erp-surface/v1/response.schema.json",
+  "title": "ERP Surface Response",
+  "description": "Defines the valid structure for ERP surface API responses with mandatory execution proof",
+  "type": "object",
+  "properties": {
+    "success": {
+      "type": "boolean",
+      "description": "Indicates whether the operation completed successfully"
+    },
+    "execution_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Unique UUID identifier for this execution"
+    },
+    "layers_executed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "List of layer identifiers that were executed"
+    },
+    "execution_graph": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "running", "completed", "failed", "skipped"]
+              },
+              "startTime": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "endTime": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "required": ["id", "type", "status"],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "enum": ["dependency", "data_flow", "control_flow"]
+              }
+            },
+            "required": ["source", "target"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["nodes", "edges"],
+      "additionalProperties": false,
+      "description": "Detailed execution graph with nodes and edges"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional response payload data"
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "description": "Error information when success is false"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of the response"
+    }
+  },
+  "required": ["success", "execution_id"],
+  "oneOf": [
+    {
+      "required": ["layers_executed"]
+    },
+    {
+      "required": ["execution_graph"]
+    }
+  ],
+  "additionalProperties": false
+}
