@@ -1,0 +1,35 @@
+# Ignore node_modules - will be installed during build
+node_modules/
+packages/contracts/node_modules/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test files
+tests/
+coverage/
+*.test.ts
+*.spec.ts
+
+# Build artifacts (will be created during build)
+dist/
+packages/contracts/dist/
+
+# Documentation
+*.md
+docs/
+
+# Development files
+.env
+.env.*
+*.log
+
+# Claude/AI
+.claude/
