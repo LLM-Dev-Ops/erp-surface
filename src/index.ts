@@ -141,7 +141,7 @@ export {
   type ShieldComposition,
   type ValidationSchema,
   type AuthorizationBoundary,
-  type SensitiveFieldMarker,
+  type SensitiveFieldMarker as ShieldSensitiveFieldMarker,
 
   // Sentinel Composition
   type SentinelComposition,
@@ -229,3 +229,77 @@ export {
   // Constants
   DEFAULT_STEPS_EXECUTED
 } from './synthesis';
+
+// =============================================================================
+// ERP COMMANDS
+// =============================================================================
+
+// Re-export ERP command module
+export {
+  // Commands with synthesis
+  executeErpSurface,
+  executeErpMap,
+  executeErpExport,
+
+  // Commands without synthesis (read-only)
+  executeErpList,
+  executeErpInspect,
+
+  // Validators
+  validateSurfaceInput,
+  validateMapInput,
+  validateExportInput,
+  validateListInput,
+  validateInspectInput,
+
+  // Formatters
+  formatListResult,
+  formatInspectResult,
+
+  // Synthesis helpers
+  detectSensitiveFields,
+  classifyDataSensitivity,
+  validateMapping,
+  assessIntegrationRisk,
+  buildSurfaceDecisionPacket,
+  buildMapDecisionPacket,
+  buildExportDecisionPacket,
+
+  // Constants
+  COMMANDS_WITH_SYNTHESIS,
+  COMMANDS_WITHOUT_SYNTHESIS,
+  COMMAND_DESCRIPTIONS,
+  SURFACE_STEPS,
+  MAP_STEPS,
+  EXPORT_STEPS,
+  ERP_ERROR_CODES,
+
+  // Utilities
+  commandHasSynthesis,
+  generateExecutionId,
+
+  // Types
+  type ErpSubcommand,
+  type DataSensitivity,
+  type SensitiveFieldMarker,
+  type DataSensitivityClassification,
+  type MappingDirection,
+  type MappingValidationResult,
+  type TypeIncompatibility,
+  type IntegrationRiskAssessment,
+  type DecisionPacket,
+  type ErpCommandInput,
+  type ErpSurfaceInput,
+  type ErpMapInput,
+  type ErpExportInput,
+  type ErpListInput,
+  type ErpInspectInput,
+  type ErpCommandResultWithSynthesis,
+  type ErpSurfaceResult,
+  type ErpMapResult,
+  type ErpExportResult,
+  type ErpCommandResultWithoutSynthesis,
+  type ErpListResult,
+  type ErpInspectResult,
+  type ErpCommandError,
+} from './commands';
