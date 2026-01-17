@@ -192,3 +192,40 @@ export {
 
 // Re-export binding interfaces for Platform Core
 export * from './bindings/consumer-interfaces';
+
+// =============================================================================
+// EXECUTIVE SYNTHESIS
+// =============================================================================
+
+// Re-export synthesis module for operational impact analysis
+export {
+  // Types
+  type RiskLevel,
+  type Recommendation,
+  type EnvironmentType,
+  type DeployReference,
+  type ExecutionMetrics,
+  type BlockingIssue,
+  type ExecutiveSummary,
+  type RiskContext,
+  type BlockingIssueContext,
+  type BuildExecutiveSummaryOptions,
+  type ExecutionResult,
+
+  // Functions
+  determineEnvironment,
+  normalizeSystemId,
+  assessRiskLevel,
+  elevateRiskForProduction,
+  determineRecommendation,
+  detectBlockingIssues,
+  buildExecutiveSummary,
+  buildSimpleSummary,
+  calculateSuccessRate,
+  countFailedIterations,
+  hasMutatingOperations,
+  involvesSensitiveData,
+
+  // Constants
+  DEFAULT_STEPS_EXECUTED
+} from './synthesis';

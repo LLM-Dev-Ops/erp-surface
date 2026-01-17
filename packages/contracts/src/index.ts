@@ -8,6 +8,16 @@
 
 // Export all types
 export {
+  // Executive Synthesis Types
+  RiskLevel,
+  Recommendation,
+  EnvironmentType,
+  DeployReference,
+  BlockingIssue,
+  ExecutionMetrics,
+  ExecutiveSummary,
+
+  // Request/Response Types
   ERPSurfaceAction,
   ERPSurfaceRequest,
   ERPSurfaceResponse,

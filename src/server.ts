@@ -21,8 +21,16 @@ import {
   ContractValidationError,
   ERPSurfaceRequest,
   ERPSurfaceResponseWithLayers,
+  ExecutiveSummary,
 } from '@agentics/contracts';
 import * as erpSurface from './index';
+import {
+  buildExecutiveSummary,
+  hasMutatingOperations,
+  involvesSensitiveData,
+  DEFAULT_STEPS_EXECUTED,
+  elevateRiskForProduction,
+} from './synthesis';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
@@ -33,7 +41,8 @@ function createResponse(
   success: boolean,
   data?: Record<string, unknown>,
   error?: { code: string; message: string; details?: Record<string, unknown> },
-  layersExecuted: string[] = ['http-boundary', 'validation', 'processing']
+  layersExecuted: string[] = ['http-boundary', 'validation', 'processing'],
+  synthesis?: ExecutiveSummary
 ): ERPSurfaceResponseWithLayers {
   return {
     success,
@@ -42,6 +51,7 @@ function createResponse(
     ...(data && { data }),
     ...(error && { error }),
     timestamp: new Date().toISOString(),
+    ...(synthesis && { synthesis }),
   };
 }
 
@@ -84,6 +94,77 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 }
 
 /**
+ * Builds executive synthesis for a surface operation
+ */
+function buildSynthesisForSurface(
+  surfaceId: string,
+  surface: erpSurface.RegistryEntry | undefined,
+  success: boolean,
+  stepsExecuted: string[],
+  isExecute: boolean = false
+): ExecutiveSummary {
+  if (!surface) {
+    // Build rejection synthesis for missing surface
+    return buildExecutiveSummary(
+      {
+        surfaceId,
+        hasMutatingOperations: false,
+        blockingContext: {
+          unresolvedEntities: [surfaceId],
+          failedBindings: [],
+          unauthorizedOperations: [],
+          policyViolations: [],
+          missingCredentials: [],
+          dataClassificationConflicts: []
+        }
+      },
+      {
+        success: false,
+        resolvedEntities: 0,
+        totalEntities: 1,
+        failedBindings: 1,
+        rejectedConstraints: 0,
+        stepsExecuted
+      }
+    );
+  }
+
+  // Determine if operation involves mutations
+  const isMutating = isExecute && hasMutatingOperations(surface);
+
+  // Determine sensitive data involvement
+  const { includesPII, includesFinancialData } = involvesSensitiveData(surface);
+
+  // Build synthesis
+  let synthesis = buildExecutiveSummary(
+    {
+      surfaceId,
+      surfaceEntry: surface,
+      hasMutatingOperations: isMutating,
+      includesPII,
+      includesFinancialData,
+      version: surface.version,
+      commitSha: process.env['GIT_SHA']
+    },
+    {
+      success,
+      resolvedEntities: success ? 1 : 0,
+      totalEntities: 1,
+      failedBindings: success ? 0 : 1,
+      rejectedConstraints: 0,
+      stepsExecuted
+    }
+  );
+
+  // Apply production risk elevation if targeting production
+  if (isExecute) {
+    synthesis = elevateRiskForProduction(synthesis);
+  }
+
+  return synthesis;
+}
+
+/**
  * Processes a validated ERP Surface request
  * This function is ONLY called after validation passes
  */
@@ -95,14 +176,34 @@ function processRequest(
   switch (action) {
     case 'getSurface': {
       const surface = erpSurface.registry.get(surfaceId);
+      const stepsExecuted = ['http-boundary', 'validation', 'registry-lookup'];
+
       if (surface) {
+        const synthesis = buildSynthesisForSurface(
+          surfaceId,
+          surface,
+          true,
+          stepsExecuted,
+          false
+        );
+
         return createResponse(
           true,
           { surface },
           undefined,
-          ['http-boundary', 'validation', 'registry-lookup']
+          stepsExecuted,
+          synthesis
         );
       }
+
+      const synthesis = buildSynthesisForSurface(
+        surfaceId,
+        undefined,
+        false,
+        stepsExecuted,
+        false
+      );
+
       return createResponse(
         false,
         undefined,
@@ -110,13 +211,24 @@ function processRequest(
           code: 'SURFACE_NOT_FOUND',
           message: `Surface '${surfaceId}' not found in registry`,
         },
-        ['http-boundary', 'validation', 'registry-lookup']
+        stepsExecuted,
+        synthesis
       );
     }
 
     case 'simulate': {
       const surface = erpSurface.registry.get(surfaceId);
+      const stepsExecuted = ['http-boundary', 'validation', 'registry-lookup', 'simulation-engine'];
+
       if (!surface) {
+        const synthesis = buildSynthesisForSurface(
+          surfaceId,
+          undefined,
+          false,
+          stepsExecuted,
+          false
+        );
+
         return createResponse(
           false,
           undefined,
@@ -124,9 +236,18 @@ function processRequest(
             code: 'SURFACE_NOT_FOUND',
             message: `Surface '${surfaceId}' not found in registry`,
           },
-          ['http-boundary', 'validation', 'registry-lookup']
+          stepsExecuted,
+          synthesis
         );
       }
+
+      const synthesis = buildSynthesisForSurface(
+        surfaceId,
+        surface,
+        true,
+        [...stepsExecuted, ...DEFAULT_STEPS_EXECUTED],
+        false
+      );
 
       return createResponse(
         true,
@@ -140,13 +261,24 @@ function processRequest(
           },
         },
         undefined,
-        ['http-boundary', 'validation', 'registry-lookup', 'simulation-engine']
+        stepsExecuted,
+        synthesis
       );
     }
 
     case 'execute': {
       const surface = erpSurface.registry.get(surfaceId);
+      const stepsExecuted = ['http-boundary', 'validation', 'registry-lookup', 'execution-engine', 'commit'];
+
       if (!surface) {
+        const synthesis = buildSynthesisForSurface(
+          surfaceId,
+          undefined,
+          false,
+          stepsExecuted,
+          true
+        );
+
         return createResponse(
           false,
           undefined,
@@ -154,9 +286,18 @@ function processRequest(
             code: 'SURFACE_NOT_FOUND',
             message: `Surface '${surfaceId}' not found in registry`,
           },
-          ['http-boundary', 'validation', 'registry-lookup']
+          stepsExecuted,
+          synthesis
         );
       }
+
+      const synthesis = buildSynthesisForSurface(
+        surfaceId,
+        surface,
+        true,
+        [...stepsExecuted, ...DEFAULT_STEPS_EXECUTED],
+        true
+      );
 
       return createResponse(
         true,
@@ -170,7 +311,8 @@ function processRequest(
           },
         },
         undefined,
-        ['http-boundary', 'validation', 'registry-lookup', 'execution-engine', 'commit']
+        stepsExecuted,
+        synthesis
       );
     }
 

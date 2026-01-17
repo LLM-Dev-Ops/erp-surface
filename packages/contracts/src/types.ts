@@ -3,6 +3,105 @@
  * @module @agentics/contracts/types
  */
 
+// =============================================================================
+// EXECUTIVE SYNTHESIS TYPES
+// =============================================================================
+
+/**
+ * Risk level for deployment recommendation
+ */
+export type RiskLevel = 'medium' | 'high' | 'critical';
+
+/**
+ * Executive recommendation for deployment
+ */
+export type Recommendation = 'APPROVE' | 'DEFER' | 'REJECT';
+
+/**
+ * Environment classification
+ */
+export type EnvironmentType = 'production' | 'staging' | 'development' | 'sandbox';
+
+/**
+ * Deployment reference information
+ */
+export interface DeployReference {
+  /** Target environment (production, staging, etc.) */
+  readonly environment: EnvironmentType;
+  /** ERP system identifier (e.g., SAP_S4, ORACLE_FINANCIALS) */
+  readonly system: string;
+  /** Execution completion timestamp (ISO 8601) */
+  readonly timestamp: string;
+  /** Optional version identifier */
+  readonly version?: string;
+  /** Optional commit SHA for traceability */
+  readonly commit_sha?: string;
+}
+
+/**
+ * Blocking issue that prevents deployment
+ */
+export interface BlockingIssue {
+  /** Issue code identifier */
+  readonly code: string;
+  /** Human-readable description */
+  readonly description: string;
+  /** Severity level */
+  readonly severity: 'error' | 'critical';
+  /** Affected component or entity */
+  readonly affected?: string;
+}
+
+/**
+ * Execution metrics for synthesis
+ */
+export interface ExecutionMetrics {
+  /**
+   * Success rate (0.0 - 1.0)
+   * 1.0 if: ERP schema mapping succeeds, required entities resolved, no blocking validation errors
+   * < 1.0 if: partial mappings or warnings exist
+   */
+  readonly success_rate: number;
+  /**
+   * Count of failed iterations:
+   * - Unresolved ERP entities
+   * - Failed schema bindings
+   * - Rejected integration constraints
+   */
+  readonly failed_iterations: number;
+  /** Steps executed during ERP surface orchestration */
+  readonly steps_executed: readonly string[];
+  /** Optional blocking issues preventing deployment */
+  readonly blocking_issues?: readonly BlockingIssue[];
+}
+
+/**
+ * Executive Summary for ERP deployment scenarios
+ *
+ * Communicates:
+ * - Operational impact
+ * - Risk posture
+ * - Deployment readiness
+ *
+ * Output is suitable for CIO / CTO / ERP owner review
+ */
+export interface ExecutiveSummary {
+  /** Deployment reference information */
+  readonly deploy_reference: DeployReference;
+  /** Execution metrics */
+  readonly metrics: ExecutionMetrics;
+  /** Risk level assessment */
+  readonly risk_level: RiskLevel;
+  /** Deployment recommendation */
+  readonly recommendation: Recommendation;
+  /** Summary rationale for the recommendation */
+  readonly rationale: string;
+  /** Data classification concerns (if any) */
+  readonly data_classification?: readonly string[];
+  /** Cross-system dependencies detected */
+  readonly cross_system_dependencies?: readonly string[];
+}
+
 /**
  * Valid actions that can be performed on the ERP surface
  */
@@ -116,6 +215,13 @@ interface ERPSurfaceResponseBase {
 
   /** ISO 8601 timestamp of the response */
   timestamp?: string;
+
+  /**
+   * Executive synthesis for operational impact analysis
+   * Provides enterprise-grade deployment readiness assessment
+   * suitable for CIO/CTO/ERP owner review
+   */
+  synthesis?: ExecutiveSummary;
 }
 
 /**
