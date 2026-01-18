@@ -718,3 +718,13 @@ export function involvesSensitiveData(entry: RegistryEntry): {
     includesFinancialData: domain === 'finance' || domain === 'procurement'
   };
 }
+
+// =============================================================================
+// RE-EXPORTS
+// =============================================================================
+
+/**
+ * ERP-Level Resolution Generation
+ * Provides concrete, actionable resolutions for executive synthesis outputs
+ */
+export * from './resolutions';
