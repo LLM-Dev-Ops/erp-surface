@@ -129,15 +129,31 @@ export {
 // COMMAND ROUTER
 // =============================================================================
 
+// =============================================================================
+// INTEGRATION AGENT COMMAND
+// =============================================================================
+
+export {
+  executeErpIntegration,
+  validateCliInput as validateIntegrationInput,
+  getIntegrationHelp,
+  type ErpIntegrationCliInput,
+  type ErpIntegrationCliResult,
+} from './integration';
+
+// =============================================================================
+// COMMAND ROUTER
+// =============================================================================
+
 /**
  * ERP subcommand type
  */
-export type ErpSubcommand = 'surface' | 'map' | 'export' | 'list' | 'inspect';
+export type ErpSubcommand = 'surface' | 'map' | 'export' | 'list' | 'inspect' | 'integration';
 
 /**
  * Commands that generate synthesis (Decision Packet)
  */
-export const COMMANDS_WITH_SYNTHESIS: readonly ErpSubcommand[] = ['surface', 'map', 'export'];
+export const COMMANDS_WITH_SYNTHESIS: readonly ErpSubcommand[] = ['surface', 'map', 'export', 'integration'];
 
 /**
  * Commands that do NOT generate synthesis (read-only)
@@ -160,4 +176,5 @@ export const COMMAND_DESCRIPTIONS: Record<ErpSubcommand, string> = {
   export: 'Generate integration artifacts (JSON, YAML, OpenAPI, GraphQL, Protobuf)',
   list: 'List available ERP surfaces (read-only, no synthesis)',
   inspect: 'Inspect ERP surface details (read-only, no synthesis)',
+  integration: 'ERP Integration Agent - Push/pull/sync with external ERP systems',
 };

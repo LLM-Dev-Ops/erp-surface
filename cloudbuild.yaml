@@ -1,34 +1,60 @@
+# =============================================================================
+# ERP SURFACE - CLOUD BUILD CONFIGURATION
+# =============================================================================
+#
+# Service: erp-surface
+# Classification: ENTERPRISE SYSTEM INTEGRATION
+#
+# This configuration deploys the unified ERP Surface service containing:
+# - ERP Surface API (surface operations, registry)
+# - ERP Integration Agent (push/pull/sync/validate/inspect)
+#
+# ARCHITECTURE RULES:
+# - ONE unified service per repository
+# - Stateless execution
+# - No direct SQL access
+# - All persistence via ruvector-service
+# - Append-only DecisionEvent writes
+#
+# =============================================================================
+
 steps:
-  # Build the Docker image
+  # Step 1: Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-image'
     args:
       - 'build'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/erp-surface:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/erp-surface:$SHORT_SHA'
       - '-t'
       - 'gcr.io/$PROJECT_ID/erp-surface:latest'
       - '.'
 
-  # Push to Container Registry
+  # Step 2: Push to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-sha'
     args:
       - 'push'
-      - 'gcr.io/$PROJECT_ID/erp-surface:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/erp-surface:$SHORT_SHA'
+    waitFor: ['build-image']
 
   - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-latest'
     args:
       - 'push'
       - 'gcr.io/$PROJECT_ID/erp-surface:latest'
+    waitFor: ['build-image']
 
-  # Deploy to Cloud Run
+  # Step 3: Deploy to Cloud Run with environment configuration
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy'
     entrypoint: 'gcloud'
     args:
       - 'run'
       - 'deploy'
       - 'erp-surface'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/erp-surface:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/erp-surface:$SHORT_SHA'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -37,24 +63,45 @@ steps:
       - '--port'
       - '8080'
       - '--memory'
-      - '512Mi'
+      - '${_MEMORY}'
       - '--cpu'
-      - '1'
+      - '${_CPU}'
       - '--min-instances'
-      - '0'
+      - '${_MIN_INSTANCES}'
       - '--max-instances'
-      - '10'
+      - '${_MAX_INSTANCES}'
       - '--concurrency'
-      - '80'
+      - '${_CONCURRENCY}'
       - '--timeout'
-      - '300'
+      - '${_TIMEOUT}'
+      - '--set-env-vars'
+      - 'SERVICE_NAME=erp-surface,SERVICE_VERSION=$SHORT_SHA,PLATFORM_ENV=${_ENVIRONMENT},ERP_SURFACE_MODE=${_ERP_MODE},RUVECTOR_SERVICE_URL=${_RUVECTOR_URL},TELEMETRY_ENDPOINT=${_TELEMETRY_URL},GIT_SHA=$SHORT_SHA'
+      - '--labels'
+      - 'service=erp-surface,environment=${_ENVIRONMENT},team=agentics'
+    waitFor: ['push-sha']
 
+# Container images to store
 images:
-  - 'gcr.io/$PROJECT_ID/erp-surface:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/erp-surface:$SHORT_SHA'
   - 'gcr.io/$PROJECT_ID/erp-surface:latest'
 
+# Substitution variables with defaults
 substitutions:
   _REGION: 'us-central1'
+  _ENVIRONMENT: 'production'
+  _ERP_MODE: 'simulation'
+  _MEMORY: '512Mi'
+  _CPU: '1'
+  _MIN_INSTANCES: '0'
+  _MAX_INSTANCES: '10'
+  _CONCURRENCY: '80'
+  _TIMEOUT: '300'
+  _RUVECTOR_URL: 'https://ruvector-service-1062287243982.us-central1.run.app'
+  _TELEMETRY_URL: 'https://llm-observatory-1062287243982.us-central1.run.app'
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  dynamic_substitutions: true
+
+# Build timeout
+timeout: '1200s'

@@ -31,6 +31,13 @@ import {
   DEFAULT_STEPS_EXECUTED,
   elevateRiskForProduction,
 } from './synthesis';
+import {
+  execute as executeIntegration,
+  validate as validateIntegration,
+  AGENT_ID,
+  AGENT_VERSION,
+  type ErpIntegrationInput,
+} from './agents/erp-integration';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
@@ -470,6 +477,138 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ==========================================================================
+  // ERP INTEGRATION AGENT ENDPOINTS
+  // ==========================================================================
+
+  // Agent info endpoint
+  if (url.pathname === '/v1/agents/erp-integration/info') {
+    if (req.method === 'GET') {
+      const response = createResponse(
+        true,
+        {
+          agentId: AGENT_ID,
+          agentVersion: AGENT_VERSION,
+          classification: 'ENTERPRISE_SYSTEM_INTEGRATION',
+          decisionType: 'erp_integration',
+          operations: ['push', 'pull', 'sync', 'validate', 'inspect'],
+          vendors: ['sap', 'oracle', 'salesforce', 'workday', 'dynamics', 'netsuite', 'servicenow'],
+          domains: ['finance', 'procurement', 'hcm', 'supply-chain', 'customer', 'service'],
+        },
+        undefined,
+        ['http-boundary', 'agent-info']
+      );
+      res.writeHead(200);
+      res.end(JSON.stringify(response));
+      return;
+    }
+  }
+
+  // Agent health endpoint
+  if (url.pathname === '/v1/agents/erp-integration/health') {
+    if (req.method === 'GET') {
+      const response = createResponse(
+        true,
+        {
+          status: 'healthy',
+          agentId: AGENT_ID,
+          agentVersion: AGENT_VERSION,
+          mode: process.env['ERP_SURFACE_MODE'] || 'simulation',
+        },
+        undefined,
+        ['http-boundary', 'agent-health']
+      );
+      res.writeHead(200);
+      res.end(JSON.stringify(response));
+      return;
+    }
+  }
+
+  // Agent validate endpoint
+  if (url.pathname === '/v1/agents/erp-integration/validate') {
+    if (req.method === 'POST') {
+      try {
+        const body = await readBody(req);
+        const payload = JSON.parse(body);
+        const validation = validateIntegration(payload);
+
+        const response = createResponse(
+          validation.valid,
+          { validation },
+          validation.valid ? undefined : {
+            code: 'VALIDATION_FAILED',
+            message: 'Input validation failed',
+            details: { errors: validation.errors },
+          },
+          ['http-boundary', 'agent-validate']
+        );
+        res.writeHead(validation.valid ? 200 : 400);
+        res.end(JSON.stringify(response));
+        return;
+      } catch (error) {
+        const response = createResponse(
+          false,
+          undefined,
+          {
+            code: 'INVALID_JSON',
+            message: error instanceof Error ? error.message : 'Invalid request',
+          },
+          ['http-boundary', 'json-parse-failed']
+        );
+        res.writeHead(400);
+        res.end(JSON.stringify(response));
+        return;
+      }
+    }
+  }
+
+  // Agent execute endpoint
+  if (url.pathname === '/v1/agents/erp-integration/execute') {
+    if (req.method === 'POST') {
+      try {
+        const body = await readBody(req);
+        const payload = JSON.parse(body) as ErpIntegrationInput;
+
+        const result = await executeIntegration(payload);
+
+        const response = createResponse(
+          result.success,
+          {
+            output: result.output,
+            decisionEvent: result.decisionEvent ? {
+              eventId: result.decisionEvent.eventId,
+              decision_type: result.decisionEvent.decision_type,
+              confidence: result.decisionEvent.confidence,
+              timestamp: result.decisionEvent.timestamp,
+            } : undefined,
+          },
+          result.success ? undefined : {
+            code: 'INTEGRATION_FAILED',
+            message: `Integration ${result.output.status}`,
+            details: result.validationErrors ? { errors: result.validationErrors } : undefined,
+          },
+          ['http-boundary', 'agent-execute', ...result.output.constraintsApplied]
+        );
+        res.writeHead(result.success ? 200 : 400);
+        res.end(JSON.stringify(response));
+        return;
+      } catch (error) {
+        const response = createResponse(
+          false,
+          undefined,
+          {
+            code: 'EXECUTION_ERROR',
+            message: error instanceof Error ? error.message : 'Execution failed',
+          },
+          ['http-boundary', 'agent-execute-failed']
+        );
+        res.writeHead(500);
+        res.end(JSON.stringify(response));
+        return;
+      }
+    }
+  }
+
   // 404 for unknown routes
   const response = createResponse(
     false,
@@ -486,12 +625,19 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`ERP Surface API running on port ${PORT}`);
+  console.log(`Service: erp-surface`);
+  console.log(`Mode: ${process.env['ERP_SURFACE_MODE'] || 'simulation'}`);
   console.log(`Contract validation: STRICT MODE (Ajv)`);
   console.log(`  - No type coercion`);
   console.log(`  - No defaults`);
   console.log(`  - Rejects unknown properties`);
   console.log(`Endpoints:`);
-  console.log(`  GET  /health        - Health check`);
-  console.log(`  GET  /v1/erpsurface - List surfaces and stats`);
-  console.log(`  POST /v1/erpsurface - Surface operations (contract validated)`);
+  console.log(`  GET  /health                              - Service health check`);
+  console.log(`  GET  /v1/erpsurface                       - List surfaces and stats`);
+  console.log(`  POST /v1/erpsurface                       - Surface operations`);
+  console.log(`  GET  /v1/agents/erp-integration/info      - Agent info`);
+  console.log(`  GET  /v1/agents/erp-integration/health    - Agent health`);
+  console.log(`  POST /v1/agents/erp-integration/validate  - Validate input`);
+  console.log(`  POST /v1/agents/erp-integration/execute   - Execute integration`);
+  console.log(`Agent: ${AGENT_ID} v${AGENT_VERSION}`);
 });

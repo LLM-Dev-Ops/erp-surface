@@ -28,7 +28,8 @@
     "@agentics/contracts": "file:packages/contracts",
     "ajv": "^8.17.1",
     "ajv-formats": "^2.1.1",
-    "claude-flow": "^2.7.47"
+    "claude-flow": "^2.7.47",
+    "jose": "^5.10.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
