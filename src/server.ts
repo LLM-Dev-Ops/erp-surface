@@ -38,6 +38,11 @@ import {
   AGENT_VERSION,
   type ErpIntegrationInput,
 } from './agents/erp-integration';
+import {
+  auditResponseSent,
+  checkRateLimit,
+  MAX_LATENCY_MS,
+} from './hardening';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
@@ -565,9 +570,44 @@ const server = http.createServer(async (req, res) => {
   // Agent execute endpoint
   if (url.pathname === '/v1/agents/erp-integration/execute') {
     if (req.method === 'POST') {
+      const requestStart = Date.now();
       try {
         const body = await readBody(req);
         const payload = JSON.parse(body) as ErpIntegrationInput;
+
+        // Pre-check rate limits for early rejection
+        const rateLimitCheck = checkRateLimit(
+          payload.target?.vendor || 'unknown',
+          payload.target?.domain || 'unknown',
+          payload.target?.environment || 'development'
+        );
+
+        if (!rateLimitCheck.allowed) {
+          const response = createResponse(
+            false,
+            undefined,
+            {
+              code: 'RATE_LIMIT_EXCEEDED',
+              message: `Rate limit exceeded. Retry after ${rateLimitCheck.retryAfterMs}ms`,
+              details: {
+                retryAfterMs: rateLimitCheck.retryAfterMs,
+                remaining: rateLimitCheck.remaining,
+              },
+            },
+            ['http-boundary', 'rate-limit-exceeded']
+          );
+          res.writeHead(429);
+          res.setHeader('Retry-After', Math.ceil((rateLimitCheck.retryAfterMs || 60000) / 1000));
+          res.setHeader('X-RateLimit-Remaining', rateLimitCheck.remaining);
+          res.setHeader('X-RateLimit-Reset', rateLimitCheck.resetMs);
+          res.end(JSON.stringify(response));
+          return;
+        }
+
+        // Add rate limit headers
+        res.setHeader('X-RateLimit-Remaining', rateLimitCheck.remaining);
+        res.setHeader('X-RateLimit-Reset', rateLimitCheck.resetMs);
+        res.setHeader('X-Latency-Budget-Ms', MAX_LATENCY_MS);
 
         const result = await executeIntegration(payload);
 
@@ -589,7 +629,20 @@ const server = http.createServer(async (req, res) => {
           },
           ['http-boundary', 'agent-execute', ...result.output.constraintsApplied]
         );
-        res.writeHead(result.success ? 200 : 400);
+
+        const statusCode = result.success ? 200 : 400;
+        const durationMs = Date.now() - requestStart;
+
+        // Audit: Response sent
+        auditResponseSent(
+          payload.correlationId,
+          payload.requestId,
+          statusCode,
+          result.success,
+          durationMs
+        );
+
+        res.writeHead(statusCode);
         res.end(JSON.stringify(response));
         return;
       } catch (error) {

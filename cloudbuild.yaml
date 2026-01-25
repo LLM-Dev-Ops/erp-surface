@@ -96,7 +96,7 @@ substitutions:
   _MAX_INSTANCES: '10'
   _CONCURRENCY: '80'
   _TIMEOUT: '300'
-  _RUVECTOR_URL: 'https://ruvector-service-1062287243982.us-central1.run.app'
+  _RUVECTOR_URL: 'https://ruvvector-service-1062287243982.us-central1.run.app'
   _TELEMETRY_URL: 'https://llm-observatory-1062287243982.us-central1.run.app'
 
 options:

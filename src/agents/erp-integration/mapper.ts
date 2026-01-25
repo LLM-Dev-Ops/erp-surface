@@ -28,6 +28,10 @@ import type {
   ErpTarget,
 } from './types';
 import { createError } from './types';
+import {
+  createMappingValidationSignal,
+  emitSignal,
+} from '../../hardening/signals';
 
 // =============================================================================
 // VENDOR ADAPTERS
@@ -376,21 +380,22 @@ export async function pullFromErp(
 
 /**
  * Validates a mapping without transmission
+ * Emits mapping_validation_signal for trust boundary auditing
  */
 export async function validateMapping(
   payload: Record<string, unknown>,
-  target: ErpTarget
+  target: ErpTarget,
+  correlationId?: string
 ): Promise<TransmissionResult> {
   const sourceRecordId = (payload['id'] || 'validation') as string;
+  const vendorMappings = VENDOR_FIELD_MAPPINGS[target.vendor];
+  const payloadKeys = Object.keys(payload);
+  const errors: string[] = [];
 
   // Validate entity type
   const domainEntities = DOMAIN_ENTITY_MAPPINGS[target.domain];
   if (!domainEntities.includes(target.entityType)) {
-    return {
-      sourceRecordId,
-      success: false,
-      error: `Entity type '${target.entityType}' not valid for domain '${target.domain}'`,
-    };
+    errors.push(`Entity type '${target.entityType}' not valid for domain '${target.domain}'`);
   }
 
   // Check if surface exists in registry
@@ -402,13 +407,45 @@ export async function validateMapping(
     warnings.push(`Surface '${surfaceId}' not found in registry - using default mapping`);
   }
 
-  // Validate required fields
+  // Validate required fields and compute mapping stats
   const mappedPayload = mapToErpPayload(payload, target);
-  if (Object.keys(mappedPayload).length <= 1) { // Only metadata
+  const mappedKeys = Object.keys(mappedPayload).filter(k => k !== '_erp_metadata');
+
+  if (mappedKeys.length === 0) {
+    errors.push('Payload has no mappable fields');
+  }
+
+  // Calculate mapping coverage
+  const fieldsMatched = payloadKeys.filter(k => vendorMappings[k] !== undefined).length;
+  const fieldsMissing = payloadKeys.length - fieldsMatched;
+  const fieldsIgnored = mappedKeys.length - fieldsMatched;
+  const transformationsApplied = payloadKeys
+    .filter(k => k.toLowerCase().includes('date') || k.toLowerCase().includes('amount'))
+    .map(k => `${k}:${target.vendor}_format`);
+
+  const isValid = errors.length === 0;
+
+  // Emit mapping_validation_signal
+  if (correlationId) {
+    const signal = createMappingValidationSignal({
+      correlationId,
+      sourceSchema: 'agentics',
+      targetSchema: `${target.vendor}:${target.domain}:${target.entityType}`,
+      fieldsMatched,
+      fieldsMissing,
+      fieldsIgnored,
+      transformationsApplied,
+      valid: isValid,
+      errors,
+    });
+    await emitSignal(signal);
+  }
+
+  if (!isValid) {
     return {
       sourceRecordId,
       success: false,
-      error: 'Payload has no mappable fields',
+      error: errors.join('; '),
     };
   }
 
@@ -500,7 +537,11 @@ export async function processBatch(
       if (input.payload) {
         const records = Array.isArray(input.payload) ? input.payload : [input.payload];
         for (const record of records) {
-          const result = await validateMapping(record as Record<string, unknown>, input.target);
+          const result = await validateMapping(
+            record as Record<string, unknown>,
+            input.target,
+            input.correlationId
+          );
           transmissions.push(result);
         }
       }

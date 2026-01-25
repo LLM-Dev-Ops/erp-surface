@@ -18,6 +18,7 @@ import type {
   ErpIntegrationDecisionEvent,
 } from './types';
 import { buildDecisionEvent, AGENT_ID, AGENT_VERSION, DECISION_TYPE } from './types';
+import { maskForTelemetry } from '../../hardening/data-masking';
 
 // =============================================================================
 // EMITTER CONFIGURATION
@@ -220,11 +221,13 @@ export class DecisionEventEmitter {
 
   /**
    * Emits telemetry to LLM-Observatory
+   * NOTE: All payload data is masked before transmission
    */
   private async emitTelemetry(
     input: ErpIntegrationInput,
     output: ErpIntegrationOutput
   ): Promise<void> {
+    // Build base telemetry without sensitive data
     const telemetry: TelemetryEvent = {
       type: 'integration_execution',
       agentId: AGENT_ID,
@@ -245,13 +248,16 @@ export class DecisionEventEmitter {
       timestamp: output.timestamp,
     };
 
+    // Mask any sensitive data that might be in the telemetry
+    const maskedTelemetry = maskForTelemetry(telemetry as unknown as Record<string, unknown>);
+
     // In simulation mode, just log
     if (process.env['ERP_SURFACE_MODE'] === 'simulation') {
       if (this.config.enableConsoleLog) {
         console.log(JSON.stringify({
           level: 'debug',
           message: 'Telemetry (simulation mode)',
-          telemetry,
+          telemetry: maskedTelemetry,
         }));
       }
       return;
@@ -264,7 +270,7 @@ export class DecisionEventEmitter {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(telemetry),
+        body: JSON.stringify(maskedTelemetry),
       });
 
       if (!response.ok) {

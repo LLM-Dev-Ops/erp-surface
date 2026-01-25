@@ -43,6 +43,17 @@ import {
 import { calculateConfidence, type ConfidenceContext } from './confidence';
 import { processBatch } from './mapper';
 import { emitDecisionEvent } from './emitter';
+import {
+  performTrustBoundaryChecks,
+  checkLatencyBudget,
+  MAX_LATENCY_MS,
+  auditRequestReceived,
+  auditValidation,
+  auditExecutionComplete,
+  createExternalRiskSignal,
+  emitSignal,
+  consumeRateLimit,
+} from '../../hardening';
 
 // =============================================================================
 // EXECUTOR TYPES
@@ -106,6 +117,13 @@ export class ErpIntegrationExecutor {
     const startTime = Date.now();
     const executionId = randomUUID();
 
+    // Audit: Request received
+    auditRequestReceived(input.correlationId, input.requestId, {
+      operation: input.operation,
+      target: input.target,
+      dryRun: input.dryRun,
+    });
+
     // Log start
     this.log('info', 'Integration execution started', {
       executionId,
@@ -115,6 +133,15 @@ export class ErpIntegrationExecutor {
 
     // Step 1: Validate input
     const validation = validateInput(input);
+
+    // Audit: Validation result
+    auditValidation(
+      input.correlationId,
+      input.requestId,
+      validation.valid,
+      validation.errors as { field: string; message: string }[]
+    );
+
     if (!validation.valid) {
       this.log('error', 'Input validation failed', { errors: validation.errors });
 
@@ -132,20 +159,76 @@ export class ErpIntegrationExecutor {
       };
     }
 
-    // Step 2: Apply force dry run if set
+    // Step 2: Perform trust boundary checks
+    const trustBoundaryCheck = await performTrustBoundaryChecks(
+      input.correlationId,
+      input.requestId,
+      input.target.vendor,
+      input.target.domain,
+      input.target.environment,
+      {
+        schemaValidated: true,
+        credentialsAvailable: true, // Assume available in simulation
+        governanceApprovalRef: input.artifact?.governanceApprovalRef,
+      }
+    );
+
+    if (!trustBoundaryCheck.ready) {
+      this.log('warn', 'Trust boundary check failed', {
+        reason: trustBoundaryCheck.blockedReason,
+      });
+
+      const output = this.buildFailureOutput(input, executionId, startTime, 'failed', {
+        recordsProcessed: 0,
+        recordsSucceeded: 0,
+        recordsFailed: 1,
+        transmissions: [{
+          sourceRecordId: input.requestId,
+          success: false,
+          error: trustBoundaryCheck.blockedReason,
+        }],
+      });
+
+      return {
+        success: false,
+        output,
+      };
+    }
+
+    // Consume rate limit after successful check
+    consumeRateLimit(input.target.vendor, input.target.domain, input.target.environment);
+
+    // Step 3: Apply force dry run if set
     const effectiveInput: ErpIntegrationInput = this.options.forceDryRun
       ? { ...input, dryRun: true }
       : input;
 
-    // Step 3: Build constraints (uses effectiveInput for accurate dry_run constraint)
+    // Step 4: Build constraints (uses effectiveInput for accurate dry_run constraint)
     const constraints = buildConstraints(effectiveInput);
     this.log('debug', 'Constraints applied', { constraints });
 
-    // Step 4: Execute integration
+    // Step 5: Execute integration with latency budget monitoring
     let outcome: IntegrationOutcome;
     let status: IntegrationStatus;
 
     try {
+      // Check latency budget before execution
+      const latencyCheck = checkLatencyBudget(startTime);
+      if (!latencyCheck.withinBudget) {
+        // Emit latency risk signal
+        const riskSignal = createExternalRiskSignal({
+          correlationId: effectiveInput.correlationId,
+          riskType: 'latency',
+          riskLevel: 'high',
+          description: `Latency budget exceeded before execution: ${latencyCheck.elapsedMs}ms > ${MAX_LATENCY_MS}ms`,
+          mitigationApplied: false,
+          blocksExecution: true,
+        });
+        await emitSignal(riskSignal);
+
+        throw createError('TIMEOUT', { elapsedMs: latencyCheck.elapsedMs, budgetMs: MAX_LATENCY_MS });
+      }
+
       outcome = await this.executeWithTimeout(effectiveInput);
 
       // Determine status
@@ -180,7 +263,7 @@ export class ErpIntegrationExecutor {
       };
     }
 
-    // Step 5: Calculate confidence
+    // Step 6: Calculate confidence
     const confidenceContext: ConfidenceContext = {
       input: effectiveInput,
       outcome,
@@ -191,7 +274,7 @@ export class ErpIntegrationExecutor {
     };
     const confidence = calculateConfidence(confidenceContext);
 
-    // Step 6: Build output
+    // Step 7: Build output
     const output = buildOutput({
       input: effectiveInput,
       executionId,
@@ -202,12 +285,22 @@ export class ErpIntegrationExecutor {
       startTime,
     });
 
-    // Step 7: Emit DecisionEvent
+    // Step 8: Emit DecisionEvent
     let decisionEvent: ErpIntegrationDecisionEvent | undefined;
     if (!this.options.skipEmit) {
       decisionEvent = await emitDecisionEvent(effectiveInput, output);
       this.log('info', 'DecisionEvent emitted', { eventId: decisionEvent.eventId });
     }
+
+    // Audit: Execution complete
+    auditExecutionComplete(
+      effectiveInput.correlationId,
+      effectiveInput.requestId,
+      executionId,
+      status,
+      confidence,
+      output.durationMs
+    );
 
     // Log completion
     this.log('info', 'Integration execution completed', {

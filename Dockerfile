@@ -13,11 +13,11 @@ COPY package*.json ./
 
 # Install dependencies for contracts package
 WORKDIR /app/packages/contracts
-RUN npm ci
+RUN npm install --ignore-scripts
 
 # Install dependencies for main app
 WORKDIR /app
-RUN npm ci
+RUN npm install --ignore-scripts
 
 # Copy contracts package source and build it
 COPY packages/contracts/ ./packages/contracts/
@@ -45,11 +45,11 @@ COPY packages/contracts/package*.json ./packages/contracts/
 
 # Install production deps for contracts
 WORKDIR /app/packages/contracts
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm install --omit=dev --ignore-scripts
 
 # Install production deps for main app
 WORKDIR /app
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm install --omit=dev --ignore-scripts
 
 # Copy built contracts
 COPY --from=builder /app/packages/contracts/dist ./packages/contracts/dist
