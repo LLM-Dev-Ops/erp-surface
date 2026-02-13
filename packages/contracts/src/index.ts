@@ -17,6 +17,11 @@ export {
   ExecutionMetrics,
   ExecutiveSummary,
 
+  // Result Packet & Execution Context Types
+  ExecutionProof,
+  ExecutionContext,
+  ResultPacket,
+
   // Request/Response Types
   ERPSurfaceAction,
   ERPSurfaceRequest,
@@ -39,6 +44,7 @@ export {
 export {
   validateRequest,
   validateResponse,
+  validateResultPacket,
   isValidRequest,
   isValidResponse,
   getRequestValidationErrors,
@@ -46,6 +52,7 @@ export {
   ajv,
   requestSchema,
   responseSchema,
+  resultPacketSchema,
 } from './validator';
 
 // Schema version information

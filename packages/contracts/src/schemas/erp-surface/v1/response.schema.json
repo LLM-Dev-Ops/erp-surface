@@ -119,6 +119,55 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 timestamp of the response"
+    },
+    "synthesis": {
+      "type": "object",
+      "properties": {
+        "deploy_reference": {
+          "type": "object",
+          "properties": {
+            "environment": { "type": "string", "enum": ["production", "staging", "development", "sandbox"] },
+            "system": { "type": "string", "minLength": 1 },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "version": { "type": "string" },
+            "commit_sha": { "type": "string" }
+          },
+          "required": ["environment", "system", "timestamp"],
+          "additionalProperties": false
+        },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "success_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "failed_iterations": { "type": "number", "minimum": 0 },
+            "steps_executed": { "type": "array", "items": { "type": "string" } },
+            "blocking_issues": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": { "type": "string", "minLength": 1 },
+                  "description": { "type": "string", "minLength": 1 },
+                  "severity": { "type": "string", "enum": ["error", "critical"] },
+                  "affected": { "type": "string" }
+                },
+                "required": ["code", "description", "severity"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["success_rate", "failed_iterations", "steps_executed"],
+          "additionalProperties": false
+        },
+        "risk_level": { "type": "string", "enum": ["medium", "high", "critical"] },
+        "recommendation": { "type": "string", "enum": ["APPROVE", "DEFER", "REJECT"] },
+        "rationale": { "type": "string", "minLength": 1 },
+        "data_classification": { "type": "array", "items": { "type": "string" } },
+        "cross_system_dependencies": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["deploy_reference", "metrics", "risk_level", "recommendation", "rationale"],
+      "additionalProperties": false,
+      "description": "Executive synthesis for operational impact analysis"
     }
   },
   "required": ["success", "execution_id"],

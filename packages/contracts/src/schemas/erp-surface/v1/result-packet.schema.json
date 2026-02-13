@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agentics.io/schemas/erp-surface/v1/result-packet.schema.json",
+  "title": "Result Packet",
+  "description": "Canonical schema for simulation result packets consumed by ERP surface. All incoming simulation data MUST conform to this structure.",
+  "type": "object",
+  "properties": {
+    "execution_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique identifier for the execution that produced this result"
+    },
+    "simulation_resolution": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Resolution status of the simulation"
+    },
+    "repo_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Repository name that produced this result"
+    },
+    "parent_span_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Parent span identifier for distributed tracing lineage"
+    },
+    "execution_proof": {
+      "type": "object",
+      "properties": {
+        "lineage_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proof_chain": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["lineage_hash", "proof_chain"],
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Result payload data"
+    }
+  },
+  "required": ["execution_id", "simulation_resolution", "repo_name", "parent_span_id", "data"],
+  "additionalProperties": false
+}

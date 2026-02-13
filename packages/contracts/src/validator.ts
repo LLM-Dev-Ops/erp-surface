@@ -8,11 +8,13 @@ import addFormats from 'ajv-formats';
 import {
   ERPSurfaceRequest,
   ERPSurfaceResponse,
+  ResultPacket,
   ContractValidationError,
   ValidationErrorDetail,
 } from './types';
 import requestSchema from './schemas/erp-surface/v1/request.schema.json';
 import responseSchema from './schemas/erp-surface/v1/response.schema.json';
+import resultPacketSchema from './schemas/erp-surface/v1/result-packet.schema.json';
 
 /**
  * Ajv instance configured in STRICT mode
@@ -48,6 +50,7 @@ addFormats(ajv);
 // Compile validators once at module load
 const validateRequestSchema: ValidateFunction = ajv.compile(requestSchema);
 const validateResponseSchema: ValidateFunction = ajv.compile(responseSchema);
+const validateResultPacketSchema: ValidateFunction = ajv.compile(resultPacketSchema);
 
 /**
  * Converts Ajv errors to ValidationErrorDetail array
@@ -200,6 +203,39 @@ export function getResponseValidationErrors(payload: unknown): ValidationErrorDe
 }
 
 /**
+ * Validates a result packet from upstream simulation
+ * Throws immediately on invalid payload
+ *
+ * @param payload - The result packet to validate
+ * @returns The validated result packet (type-narrowed)
+ * @throws {ContractValidationError} If validation fails
+ */
+export function validateResultPacket(payload: unknown): ResultPacket {
+  if (payload === null || payload === undefined) {
+    throw new ContractValidationError('Result packet is required', [
+      {
+        instancePath: '/',
+        keyword: 'required',
+        message: 'Result packet is required',
+        params: {},
+      },
+    ]);
+  }
+
+  const valid = validateResultPacketSchema(payload);
+
+  if (!valid) {
+    const errors = convertErrors(validateResultPacketSchema.errors);
+    throw new ContractValidationError(
+      `Invalid result packet: ${errors.map((e) => e.message).join(', ')}`,
+      errors
+    );
+  }
+
+  return payload as ResultPacket;
+}
+
+/**
  * Re-export the Ajv instance for advanced use cases
  */
 export { ajv };
@@ -207,4 +243,4 @@ export { ajv };
 /**
  * Re-export schema objects for direct access
  */
-export { requestSchema, responseSchema };
+export { requestSchema, responseSchema, resultPacketSchema };

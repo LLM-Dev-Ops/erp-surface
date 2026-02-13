@@ -18,6 +18,7 @@ import * as http from 'http';
 import { randomUUID } from 'crypto';
 import {
   validateRequest,
+  validateResultPacket,
   ContractValidationError,
   ERPSurfaceRequest,
   ERPSurfaceResponseWithLayers,
@@ -437,6 +438,13 @@ const server = http.createServer(async (req, res) => {
         // ============================================================
         const validatedRequest = validateRequest(payload);
 
+        // For simulate and execute actions, validate input as ResultPacket
+        // MANDATORY: reject if execution_id, simulation_resolution,
+        // repo_name, or parent_span_id are missing
+        if (validatedRequest.action === 'simulate' || validatedRequest.action === 'execute') {
+          validateResultPacket(validatedRequest.input);
+        }
+
         // Request passed validation - now process it
         const response = processRequest(validatedRequest);
 
@@ -573,13 +581,50 @@ const server = http.createServer(async (req, res) => {
       const requestStart = Date.now();
       try {
         const body = await readBody(req);
-        const payload = JSON.parse(body) as ErpIntegrationInput;
 
-        // Pre-check rate limits for early rejection
+        let rawPayload: unknown;
+        try {
+          rawPayload = JSON.parse(body);
+        } catch {
+          const response = createResponse(
+            false,
+            undefined,
+            {
+              code: 'INVALID_JSON',
+              message: 'Request body is not valid JSON',
+            },
+            ['http-boundary', 'json-parse-failed']
+          );
+          res.writeHead(400);
+          res.end(JSON.stringify(response));
+          return;
+        }
+
+        // Validate input against agent contract — reject before any processing
+        const validation = validateIntegration(rawPayload);
+        if (!validation.valid) {
+          const response = createResponse(
+            false,
+            undefined,
+            {
+              code: 'CONTRACT_VALIDATION_ERROR',
+              message: 'Agent input validation failed',
+              details: { errors: validation.errors },
+            },
+            ['http-boundary', 'validation-failed']
+          );
+          res.writeHead(400);
+          res.end(JSON.stringify(response));
+          return;
+        }
+
+        const payload = rawPayload as ErpIntegrationInput;
+
+        // Pre-check rate limits — fields guaranteed present by validation
         const rateLimitCheck = checkRateLimit(
-          payload.target?.vendor || 'unknown',
-          payload.target?.domain || 'unknown',
-          payload.target?.environment || 'development'
+          payload.target.vendor,
+          payload.target.domain,
+          payload.target.environment
         );
 
         if (!rateLimitCheck.allowed) {
@@ -646,12 +691,20 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify(response));
         return;
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Execution failed';
+        console.error(JSON.stringify({
+          level: 'error',
+          message: 'Agent execution error',
+          error: errorMessage,
+          path: '/v1/agents/erp-integration/execute',
+          timestamp: new Date().toISOString(),
+        }));
         const response = createResponse(
           false,
           undefined,
           {
             code: 'EXECUTION_ERROR',
-            message: error instanceof Error ? error.message : 'Execution failed',
+            message: errorMessage,
           },
           ['http-boundary', 'agent-execute-failed']
         );
@@ -675,6 +728,26 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404);
   res.end(JSON.stringify(response));
 });
+
+// =============================================================================
+// ENVIRONMENT ENFORCEMENT
+// Execution mode requires explicit upstream service configuration.
+// Simulation mode may use defaults.
+// =============================================================================
+const serviceMode = process.env['ERP_SURFACE_MODE'];
+if (serviceMode && serviceMode !== 'simulation') {
+  const required: [string, string][] = [
+    ['RUVECTOR_ENDPOINT', 'DecisionEvent persistence service URL'],
+  ];
+  const missing = required.filter(([key]) => !process.env[key]);
+  if (missing.length > 0) {
+    for (const [key, desc] of missing) {
+      console.error(`FATAL: Required environment variable ${key} (${desc}) is not set`);
+    }
+    console.error('Service cannot start in execution mode without required upstream services');
+    process.exit(1);
+  }
+}
 
 server.listen(PORT, () => {
   console.log(`ERP Surface API running on port ${PORT}`);

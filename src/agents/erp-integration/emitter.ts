@@ -191,31 +191,20 @@ export class DecisionEventEmitter {
       return;
     }
 
-    // In execution mode, would make HTTP call
-    // This is a placeholder for future binding layer integration
-    try {
-      const response = await fetch(`${this.config.ruvectorEndpoint}/v1/events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+    // In execution mode, persist via HTTP — failures MUST propagate
+    const response = await fetch(`${this.config.ruvectorEndpoint}/v1/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-      if (!response.ok) {
-        console.error(JSON.stringify({
-          level: 'error',
-          message: 'Failed to persist to ruvector-service',
-          status: response.status,
-          statusText: response.statusText,
-        }));
-      }
-    } catch (error) {
-      console.error(JSON.stringify({
-        level: 'error',
-        message: 'Error persisting to ruvector-service',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      }));
+    if (!response.ok) {
+      throw new Error(
+        `Failed to persist DecisionEvent to ruvector-service: ` +
+        `status=${response.status} execution_id=${event.outputs.executionId} event_id=${event.eventId}`
+      );
     }
   }
 
@@ -276,15 +265,19 @@ export class DecisionEventEmitter {
       if (!response.ok) {
         console.warn(JSON.stringify({
           level: 'warn',
-          message: 'Failed to emit telemetry (non-blocking)',
+          message: 'Failed to emit telemetry',
+          execution_id: output.executionId,
+          correlation_id: input.correlationId,
           status: response.status,
         }));
       }
     } catch (error) {
-      // Telemetry failures are non-blocking
+      // Telemetry failures are non-blocking but must include execution context
       console.warn(JSON.stringify({
         level: 'warn',
-        message: 'Error emitting telemetry (non-blocking)',
+        message: 'Error emitting telemetry',
+        execution_id: output.executionId,
+        correlation_id: input.correlationId,
         error: error instanceof Error ? error.message : 'Unknown error',
       }));
     }

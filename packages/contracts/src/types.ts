@@ -102,6 +102,57 @@ export interface ExecutiveSummary {
   readonly cross_system_dependencies?: readonly string[];
 }
 
+// =============================================================================
+// RESULT PACKET & EXECUTION CONTEXT TYPES
+// =============================================================================
+
+/**
+ * Execution proof for lineage verification
+ */
+export interface ExecutionProof {
+  /** Hash of the execution lineage chain */
+  readonly lineage_hash: string;
+  /** Ordered proof chain entries */
+  readonly proof_chain: readonly string[];
+}
+
+/**
+ * Execution context metadata
+ */
+export interface ExecutionContext {
+  /** Unique execution identifier */
+  readonly execution_id: string;
+  /** Parent span ID for distributed tracing */
+  readonly parent_span_id: string;
+  /** Source repository name */
+  readonly repo_name: string;
+  /** Simulation resolution status */
+  readonly simulation_resolution: string;
+  /** Context timestamp (ISO 8601) */
+  readonly timestamp: string;
+}
+
+/**
+ * Result packet from upstream simulation
+ *
+ * Canonical schema for simulation outputs consumed by ERP surface.
+ * All incoming simulation data MUST conform to this structure.
+ */
+export interface ResultPacket {
+  /** Unique execution identifier (REQUIRED) */
+  readonly execution_id: string;
+  /** Simulation resolution status (REQUIRED) */
+  readonly simulation_resolution: string;
+  /** Source repository name (REQUIRED) */
+  readonly repo_name: string;
+  /** Parent span ID for tracing lineage (REQUIRED) */
+  readonly parent_span_id: string;
+  /** Execution proof for lineage verification (if available) */
+  readonly execution_proof?: ExecutionProof;
+  /** Result payload data */
+  readonly data: Record<string, unknown>;
+}
+
 /**
  * Valid actions that can be performed on the ERP surface
  */
